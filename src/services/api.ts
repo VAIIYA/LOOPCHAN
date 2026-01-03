@@ -1,10 +1,11 @@
 import { CreateThreadRequest, CreatePostRequest, BlobUploadResult } from '@/types';
 
 export class ApiService {
-  static async uploadFile(file: File): Promise<BlobUploadResult> {
+  static async uploadFile(file: File, authorWallet: string): Promise<BlobUploadResult> {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('authorWallet', authorWallet);
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -25,7 +26,7 @@ export class ApiService {
     }
   }
 
-  static async createThread(request: CreateThreadRequest): Promise<any> {
+  static async createThread(request: CreateThreadRequest & { authorWallet?: string }): Promise<any> {
     console.log('Creating thread:', request);
     
     try {
@@ -85,7 +86,7 @@ export class ApiService {
     }
   }
 
-  static async createPost(request: CreatePostRequest): Promise<any> {
+  static async createPost(request: CreatePostRequest & { authorWallet?: string }): Promise<any> {
     console.log('Creating post:', request);
     
     const response = await fetch(`/api/threads/${request.threadId}/posts`, {

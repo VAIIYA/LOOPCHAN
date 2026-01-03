@@ -3,7 +3,7 @@
 import React from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 
-export const WalletConnect: React.FC = () => {
+const WalletConnect: React.FC = () => {
   const { wallet, connect, disconnect } = useWallet();
 
   const formatAddress = (address: string) => {
@@ -48,3 +48,5 @@ export const WalletConnect: React.FC = () => {
     </div>
   );
 };
+
+export default WalletConnect;

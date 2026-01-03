@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { getAllThreads, createThread } from '@/lib/mongodbStorage';
 import { revalidatePath } from 'next/cache';
 
@@ -32,18 +31,18 @@ function generateUniqueSlug(existingThreads: any[], title: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await auth();
-    if (!session || !session.user?.id) {
+    // Check wallet authentication
+    const body = await request.json();
+    const { title, content, image, video, authorWallet } = body;
+    
+    if (!authorWallet) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Wallet connection required. Please connect your Solana wallet.' },
         { status: 401 }
       );
     }
 
     console.log('POST /api/threads called');
-    const body = await request.json();
-    const { title, content, image, video } = body;
     
     console.log('Request body:', { title, hasContent: !!content, hasImage: !!image, hasVideo: !!video });
 
@@ -93,10 +92,10 @@ export async function POST(request: NextRequest) {
         content: content || undefined,
         image: image || undefined,
         video: video || undefined,
-        authorId: session.user.id,
+        authorId: authorWallet,
         timestamp: new Date()
       },
-      authorId: session.user.id,
+      authorId: authorWallet,
     };
 
     // Create the thread using MongoDB storage

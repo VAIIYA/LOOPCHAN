@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import '../src/index.css'
-import { SessionProviderWrapper } from '@/components/SessionProviderWrapper'
+import { WalletProvider } from '@/contexts/WalletContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -31,9 +31,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} bg-gradient-to-br from-orange-50 to-amber-50`}>
-        <SessionProviderWrapper>
+        <WalletProvider>
           {children}
-        </SessionProviderWrapper>
+        </WalletProvider>
       </body>
     </html>
   )

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { uploadFileToGridFS } from '@/lib/mongodbStorage';
 
 // Allowed file types
@@ -13,38 +12,17 @@ const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10MB for videos
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if NEXTAUTH_SECRET is configured
-    if (!process.env.NEXTAUTH_SECRET && process.env.NODE_ENV === 'production') {
-      console.error('NEXTAUTH_SECRET is not configured');
-      return NextResponse.json({ 
-        error: 'Server configuration error: NEXTAUTH_SECRET is missing' 
-      }, { status: 500 });
-    }
-
-    // Check authentication
-    let session;
-    try {
-      session = await auth();
-    } catch (authError) {
-      console.error('Auth error:', authError);
-      const errorMessage = authError instanceof Error ? authError.message : 'Unknown auth error';
-      console.error('Auth error details:', errorMessage);
-      return NextResponse.json({ 
-        error: 'Authentication failed',
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-      }, { status: 401 });
-    }
-    
-    if (!session || !session.user?.id) {
-      console.warn('Upload attempted without authentication');
-      return NextResponse.json({ 
-        error: 'Authentication required. Please sign in with email/password.',
-        hint: 'The system now uses email/password authentication instead of wallet connection.'
-      }, { status: 401 });
-    }
-
     const formData = await request.formData();
     const file = formData.get('file') as File;
+    const authorWallet = formData.get('authorWallet') as string;
+    
+    // Check wallet authentication
+    if (!authorWallet) {
+      console.warn('Upload attempted without wallet connection');
+      return NextResponse.json({ 
+        error: 'Wallet connection required. Please connect your Solana wallet.',
+      }, { status: 401 });
+    }
     
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -98,7 +76,7 @@ export async function POST(request: NextRequest) {
       buffer,
       filename,
       file.type,
-      session.user.id
+      authorWallet
     );
 
     return NextResponse.json({

@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { Send, X, Upload, Image, Video } from 'lucide-react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useWallet } from '@/contexts/WalletContext';
 
 interface PostFormData {
   content?: string | null; // Made optional - users can post just an image/video
@@ -23,8 +22,7 @@ export const PostForm: React.FC<PostFormProps> = ({
   onSubmit, 
   onCancel 
 }) => {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { wallet, connect } = useWallet();
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -33,8 +31,13 @@ export const PostForm: React.FC<PostFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (status === 'unauthenticated' || !session) {
-      router.push('/auth/signin');
+    if (!wallet.connected || !wallet.publicKey) {
+      alert('Please connect your Solana wallet to post');
+      try {
+        await connect();
+      } catch (error) {
+        console.error('Failed to connect wallet:', error);
+      }
       return;
     }
     
@@ -126,21 +129,22 @@ export const PostForm: React.FC<PostFormProps> = ({
     return `${isVideo ? 'Video' : 'Image'} (${mediaFile.name})`;
   };
 
-  if (status === 'unauthenticated' || !session) {
+  if (!wallet.connected || !wallet.publicKey) {
     return (
       <div className="bg-white border border-orange-200 rounded-lg p-6 shadow-md">
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Sign In Required
+            Wallet Connection Required
           </h3>
           <p className="text-gray-600 mb-4">
-            You need to sign in to create threads and post replies.
+            You need to connect your Solana wallet to create threads and post replies.
           </p>
           <button
-            onClick={() => router.push('/auth/signin')}
-            className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-2 rounded-lg"
+            onClick={connect}
+            disabled={wallet.connecting}
+            className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 disabled:from-gray-400 disabled:to-gray-400 text-white px-6 py-2 rounded-lg"
           >
-            Sign In
+            {wallet.connecting ? 'Connecting...' : 'Connect Wallet'}
           </button>
         </div>
       </div>

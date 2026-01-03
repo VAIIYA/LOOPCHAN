@@ -65,7 +65,7 @@ export interface CreateThreadRequest {
   content?: string; // Made optional - users can post just an image/video
   image?: string;
   video?: string;
-  // authorWallet removed - handled by server authentication
+  authorWallet?: string; // Solana wallet address
 }
 
 export interface CreatePostRequest {
@@ -73,5 +73,5 @@ export interface CreatePostRequest {
   content?: string | null; // Made optional - users can post just an image/video
   image?: string | null;
   video?: string | null;
-  // authorWallet removed - handled by server authentication
+  authorWallet?: string; // Solana wallet address
 }

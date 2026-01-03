@@ -5,8 +5,7 @@ import { Thread, Post } from '../types';
 import { PostComponent } from './PostComponent';
 import { PostForm } from './PostForm';
 import { ArrowLeft, MessageSquare, User } from 'lucide-react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useWallet } from '@/contexts/WalletContext';
 import { ApiService } from '../services/api';
 
 interface ThreadViewProps {
@@ -22,8 +21,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadQueue, setUploadQueue] = useState<Array<{id: string, data: any, status: 'pending' | 'uploading' | 'completed' | 'failed'}>>([]);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { wallet } = useWallet();
 
   // Function to refresh thread data with smart merging
   const refreshThreadData = useCallback(async () => {
@@ -147,14 +145,14 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     let videoUrl = null;
     
     // Upload file if present
-    if (data.image) {
-      const uploadResult = await ApiService.uploadFile(data.image);
+    if (data.image && wallet.publicKey) {
+      const uploadResult = await ApiService.uploadFile(data.image, wallet.publicKey);
       imageUrl = uploadResult.url;
       console.log('Image uploaded:', imageUrl);
     }
     
-    if (data.video) {
-      const uploadResult = await ApiService.uploadFile(data.video);
+    if (data.video && wallet.publicKey) {
+      const uploadResult = await ApiService.uploadFile(data.video, wallet.publicKey);
       videoUrl = uploadResult.url;
       console.log('Video uploaded:', videoUrl);
     }
@@ -164,7 +162,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
       content: data.content,
       image: imageUrl,
       video: videoUrl,
-      authorWallet: session?.user?.email || 'anonymous'
+      authorWallet: wallet.publicKey || 'anonymous'
     };
     
     console.log('Creating reply with data:', replyData);
@@ -237,7 +235,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
       setTimeout(() => setShowSuccessToast(false), 3000); // Hide after 3 seconds
     }
     
-  }, [session, thread.id, uploadQueue]);
+  }, [wallet.publicKey, thread.id, uploadQueue]);
 
   // Effect to process upload queue when it changes
   useEffect(() => {
@@ -250,8 +248,8 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
   // Function to create and add a new post with instant display
   const createNewPost = useCallback(async (data: any) => {
     try {
-      if (status === 'unauthenticated' || !session) {
-        router.push('/auth/signin');
+      if (!wallet.connected || !wallet.publicKey) {
+        alert('Please connect your Solana wallet to post');
         return;
       }
 
@@ -265,7 +263,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
         image: data.image ? URL.createObjectURL(data.image) : null, // INSTANT preview
         imageThumb: data.image ? URL.createObjectURL(data.image) : null, // INSTANT preview
         video: data.video ? URL.createObjectURL(data.video) : null, // INSTANT preview
-        authorWallet: session.user?.email || 'anonymous',
+        authorWallet: wallet.publicKey || 'anonymous',
         isAnonymous: true
       };
 
@@ -291,7 +289,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     } finally {
       setIsSubmitting(false);
     }
-  }, [session, status, router, addNewPostOptimistically]);
+  }, [wallet, addNewPostOptimistically]);
   
   // Validate thread data
   if (!thread) {
@@ -435,7 +433,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
 
       {/* Always show Reply button at the bottom */}
       <div className="text-center py-8 border-t border-orange-200 mt-6">
-        {status === 'authenticated' && session ? (
+        {wallet.connected && wallet.publicKey ? (
           <button
             onClick={() => setShowReplyForm(!showReplyForm)}
             disabled={isSubmitting || uploadQueue.length > 0}
@@ -452,17 +450,11 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-center space-x-2 text-blue-800 mb-2">
                 <User size={20} />
-                <span className="font-medium">Sign In Required</span>
+                <span className="font-medium">Wallet Connection Required</span>
               </div>
               <p className="text-blue-700 text-sm mb-4">
-                Sign in to reply to threads.
+                Connect your Solana wallet to reply to threads.
               </p>
-              <button
-                onClick={() => router.push('/auth/signin')}
-                className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg"
-              >
-                Sign In
-              </button>
             </div>
           </div>
         )}

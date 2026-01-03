@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { CreatePostRequest } from '@/types';
 import { getThreadById, addCommentToThread } from '@/lib/mongodbStorage';
@@ -12,22 +11,21 @@ export async function POST(
   { params }: { params: { threadId: string } }
 ) {
   try {
-    // Check authentication
-    const session = await auth();
-    if (!session || !session.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
     console.log('POST /api/threads/[threadId]/posts called with params:', params);
     const { threadId } = params;
     const body: CreatePostRequest = await _request.json();
     
     console.log('Request body:', body);
     
-    const { content, image, video } = body;
+    const { content, image, video, authorWallet } = body;
+    
+    // Check wallet authentication
+    if (!authorWallet) {
+      return NextResponse.json(
+        { error: 'Wallet connection required. Please connect your Solana wallet.' },
+        { status: 401 }
+      );
+    }
 
     // Content, image, and video are optional, but at least one must be provided
     if (!content && !image && !video) {
@@ -55,7 +53,7 @@ export async function POST(
       content: content || undefined,
       image: image || undefined,
       video: video || undefined,
-      authorId: session.user.id,
+      authorId: authorWallet,
       timestamp: new Date(),
     };
 

@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { DollarSign, Clock, Target, Smartphone, Monitor, CheckCircle, AlertCircle } from 'lucide-react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useWallet } from '@/contexts/WalletContext';
 import { Header } from '../../src/components/Header';
 
 interface AdPackage {
@@ -76,8 +75,7 @@ const adPlacements: AdPlacement[] = [
 ];
 
 export default function AdvertisePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { wallet, connect } = useWallet();
   const [selectedPackage, setSelectedPackage] = useState<string>('14days');
   const [selectedPlacements, setSelectedPlacements] = useState<string[]>(['desktop-header']);
   const [selectedBoards, setSelectedBoards] = useState<string[]>(['all']);
@@ -136,9 +134,13 @@ export default function AdvertisePage() {
   };
 
   const handlePurchase = async () => {
-    if (status !== 'authenticated' || !session) {
-      alert('Please sign in to purchase advertising');
-      router.push('/auth/signin');
+    if (!wallet.connected || !wallet.publicKey) {
+      alert('Please connect your Solana wallet to purchase advertising');
+      try {
+        await connect();
+      } catch (error) {
+        console.error('Failed to connect wallet:', error);
+      }
       return;
     }
 
@@ -448,17 +450,18 @@ export default function AdvertisePage() {
                 </div>
               </div>
 
-              {status !== 'authenticated' || !session ? (
+              {!wallet.connected || !wallet.publicKey ? (
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
                   <AlertCircle className="w-6 h-6 text-orange-500 mx-auto mb-2" />
                   <p className="text-orange-800 mb-3">
-                    Please sign in to purchase advertising
+                    Please connect your Solana wallet to purchase advertising
                   </p>
                   <button
-                    onClick={() => router.push('/auth/signin')}
-                    className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600"
+                    onClick={connect}
+                    disabled={wallet.connecting}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 disabled:bg-orange-300"
                   >
-                    Sign In
+                    {wallet.connecting ? 'Connecting...' : 'Connect Wallet'}
                   </button>
                 </div>
               ) : (
