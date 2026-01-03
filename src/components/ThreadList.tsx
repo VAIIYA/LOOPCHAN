@@ -445,14 +445,14 @@ export const ThreadList: React.FC<ThreadListProps> = ({
                     }`}
                   >
                     <div className="flex items-start space-x-4">
-                      {thread.op.image && (
+                      {thread.op && thread.op.image && (
                         <img
                           src={thread.op.imageThumb || thread.op.image}
                           alt="Thread image"
                           className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                         />
                       )}
-                      {thread.op.video && !thread.op.image && (
+                      {thread.op && thread.op.video && !thread.op.image && (
                         <div className="w-16 h-16 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center">
                           <Video size={24} className="text-gray-400" />
                         </div>
@@ -471,7 +471,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
                         </div>
                         
                         <p className="text-gray-600 text-sm mb-3 line-clamp-3">
-                          {thread.op.content}
+                          {thread.op?.content || ''}
                         </p>
                         
                         <div className="flex items-center justify-between text-xs text-gray-500">

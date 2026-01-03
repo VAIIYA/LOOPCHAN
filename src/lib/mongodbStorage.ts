@@ -32,12 +32,24 @@ export async function getAllThreads() {
       return {
         ...thread,
         op: opPost ? {
+          id: opPost.id,
           content: opPost.content || null,
           image: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
+          imageThumb: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
           video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
-          authorWallet: 'anonymous', // Keep for compatibility
-          timestamp: opPost.timestamp,
-        } : null,
+          authorWallet: opPost.authorId || 'anonymous',
+          timestamp: opPost.timestamp || thread.createdAt,
+          isAnonymous: opPost.isAnonymous !== false,
+        } : {
+          id: `fallback_${thread.id}`,
+          content: null,
+          image: undefined,
+          imageThumb: undefined,
+          video: undefined,
+          authorWallet: 'anonymous',
+          timestamp: thread.createdAt || new Date(),
+          isAnonymous: true,
+        },
       };
     })
   );
@@ -63,12 +75,24 @@ export async function getThreadById(threadId: string) {
   return {
     ...thread,
     op: opPost ? {
-      content: opPost.content,
+      id: opPost.id,
+      content: opPost.content || null,
       image: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
+      imageThumb: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
       video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
+      authorWallet: opPost.authorId || 'anonymous',
+      timestamp: opPost.timestamp || thread.createdAt,
+      isAnonymous: opPost.isAnonymous !== false,
+    } : {
+      id: `fallback_${thread.id}`,
+      content: null,
+      image: undefined,
+      imageThumb: undefined,
+      video: undefined,
       authorWallet: 'anonymous',
-      timestamp: opPost.timestamp,
-    } : null,
+      timestamp: thread.createdAt || new Date(),
+      isAnonymous: true,
+    },
     replies: replies.map(reply => ({
       id: reply.id,
       timestamp: reply.timestamp,
