@@ -62,6 +62,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Extract file IDs from URLs if they are URLs
+    // URLs come in format: /api/files/{fileId}
+    const extractFileId = (urlOrId: string | undefined): string | undefined => {
+      if (!urlOrId) return undefined;
+      if (urlOrId.startsWith('/api/files/')) {
+        return urlOrId.replace('/api/files/', '');
+      }
+      // If it's already an ID, return as is
+      return urlOrId;
+    };
+
+    const imageFileId = extractFileId(image);
+    const videoFileId = extractFileId(video);
+
     // Load existing threads to check for slug uniqueness
     let threadsIndex = null;
     try {
@@ -90,8 +104,8 @@ export async function POST(request: NextRequest) {
       title,
       op: {
         content: content || undefined,
-        image: image || undefined,
-        video: video || undefined,
+        image: imageFileId || undefined,
+        video: videoFileId || undefined,
         authorId: authorWallet,
         timestamp: new Date()
       },
@@ -99,7 +113,15 @@ export async function POST(request: NextRequest) {
     };
 
     // Create the thread using MongoDB storage
-    console.log(`Creating new thread with MongoDB storage`);
+    console.log(`Creating new thread with MongoDB storage`, {
+      threadId,
+      slug,
+      title,
+      hasContent: !!content,
+      imageFileId,
+      videoFileId,
+      authorWallet
+    });
     try {
       const thread = await createThread(newThreadData);
       console.log(`Thread created successfully with slug "${slug}" (ID: ${threadId})`);
@@ -113,17 +135,24 @@ export async function POST(request: NextRequest) {
           id: thread.id,
           slug: thread.slug,
           title: thread.title,
-          replyCount: thread.replyCount,
-          imageCount: thread.imageCount,
-          videoCount: thread.videoCount,
+          replyCount: thread.replyCount || 0,
+          imageCount: thread.imageCount || 0,
+          videoCount: thread.videoCount || 0,
           createdAt: thread.createdAt,
           lastActivity: thread.lastActivity,
         }
       });
     } catch (createError) {
       console.error(`CRITICAL: Failed to create thread:`, createError);
+      const errorMessage = createError instanceof Error ? createError.message : 'Unknown error';
+      const errorStack = createError instanceof Error ? createError.stack : undefined;
+      console.error('Error details:', { errorMessage, errorStack, newThreadData });
       return NextResponse.json(
-        { success: false, error: 'Failed to create thread' },
+        { 
+          success: false, 
+          error: 'Failed to create thread',
+          details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        },
         { status: 500 }
       );
     }

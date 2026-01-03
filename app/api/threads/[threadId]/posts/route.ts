@@ -35,6 +35,20 @@ export async function POST(
       );
     }
 
+    // Extract file IDs from URLs if they are URLs
+    // URLs come in format: /api/files/{fileId}
+    const extractFileId = (urlOrId: string | undefined | null): string | undefined => {
+      if (!urlOrId) return undefined;
+      if (typeof urlOrId === 'string' && urlOrId.startsWith('/api/files/')) {
+        return urlOrId.replace('/api/files/', '');
+      }
+      // If it's already an ID, return as is
+      return urlOrId;
+    };
+
+    const imageFileId = extractFileId(image);
+    const videoFileId = extractFileId(video);
+
     // Load the thread data from MongoDB
     const threadData = await getThreadById(threadId);
     
@@ -51,8 +65,8 @@ export async function POST(
     const newComment = {
       id: commentId,
       content: content || undefined,
-      image: image || undefined,
-      video: video || undefined,
+      image: imageFileId || undefined,
+      video: videoFileId || undefined,
       authorId: authorWallet,
       timestamp: new Date(),
     };
