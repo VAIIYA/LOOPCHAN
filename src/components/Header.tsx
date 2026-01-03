@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react';
-import { WalletConnect } from './WalletConnect';
+import { AuthButton } from './AuthButton';
 
 interface HeaderProps {
   showHomeLink?: boolean;
@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
           
-          <WalletConnect />
+          <AuthButton />
         </div>
       </div>
     </header>

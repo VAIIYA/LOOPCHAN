@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllThreads, createThread, ThreadData } from '@/lib/memoryStorage';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { getAllThreads, createThread } from '@/lib/mongodbStorage';
 import { revalidatePath } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
@@ -31,16 +33,25 @@ function generateUniqueSlug(existingThreads: any[], title: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     console.log('POST /api/threads called');
     const body = await request.json();
-    const { title, content, image, video, authorWallet } = body;
+    const { title, content, image, video } = body;
     
-    console.log('Request body:', { title, hasContent: !!content, hasImage: !!image, hasVideo: !!video, authorWallet });
+    console.log('Request body:', { title, hasContent: !!content, hasImage: !!image, hasVideo: !!video });
 
     // Validate required fields
-    if (!title || !authorWallet) {
+    if (!title) {
       return NextResponse.json(
-        { error: 'Title and wallet connection are required' },
+        { error: 'Title is required' },
         { status: 400 }
       );
     }
@@ -53,28 +64,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load existing threads index
+    // Load existing threads to check for slug uniqueness
     let threadsIndex = null;
     try {
       threadsIndex = await getAllThreads();
     } catch (error) {
-      console.error('Failed to load threads index from Lighthouse:', error);
+      console.error('Failed to load threads index:', error);
     }
     
     if (!threadsIndex) {
-      console.error('CRITICAL: Failed to load threads index after retries');
-      return NextResponse.json(
-        { success: false, error: 'Failed to load existing threads data' },
-        { status: 500 }
-      );
+      threadsIndex = { threads: [], totalThreads: 0, lastUpdated: new Date().toISOString() };
     }
     
     console.log(`Loaded ${threadsIndex.threads.length} existing threads`);
-    
-    // Check if we're at capacity (will handle cleanup automatically)
-    if (threadsIndex.threads.length >= 100) {
-      console.log(`Threads at capacity (${threadsIndex.threads.length} threads), will clean up old threads`);
-    }
 
     // Create new thread
     const threadId = `thread_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
@@ -82,10 +84,9 @@ export async function POST(request: NextRequest) {
     // Generate unique slug for the thread
     const slug = generateUniqueSlug(threadsIndex.threads, title);
     console.log(`Generated slug for thread "${title}": ${slug}`);
-    console.log(`Slug details: length=${slug.length}, type=${typeof slug}, value="${slug}"`);
     
     // Create thread data structure
-    const newThreadData: ThreadData = {
+    const newThreadData = {
       id: threadId,
       slug,
       title,
@@ -93,24 +94,34 @@ export async function POST(request: NextRequest) {
         content: content || undefined,
         image: image || undefined,
         video: video || undefined,
-        authorWallet,
+        authorId: session.user.id,
         timestamp: new Date()
       },
-      replyCount: 0,
-      imageCount: image ? 1 : 0,
-      videoCount: video ? 1 : 0,
-      createdAt: new Date(),
-      lastActivity: new Date(),
-      authorWallet
+      authorId: session.user.id,
     };
 
-    // Create the thread using the new folder-based storage
-    console.log(`Creating new thread with folder-based storage`);
-    console.log(`New thread will be added to TOP of board (pushes all other threads down)`);
+    // Create the thread using MongoDB storage
+    console.log(`Creating new thread with MongoDB storage`);
     try {
-      await createThread(newThreadData);
-      console.log(`Thread created successfully with slug "${newThreadData.slug}" (ID: ${newThreadData.id})`);
-      console.log(`Thread is now at position 0 (top of board)`);
+      const thread = await createThread(newThreadData);
+      console.log(`Thread created successfully with slug "${slug}" (ID: ${threadId})`);
+      
+      // Revalidate the homepage to ensure fresh data
+      revalidatePath('/');
+
+      return NextResponse.json({
+        success: true,
+        thread: {
+          id: thread.id,
+          slug: thread.slug,
+          title: thread.title,
+          replyCount: thread.replyCount,
+          imageCount: thread.imageCount,
+          videoCount: thread.videoCount,
+          createdAt: thread.createdAt,
+          lastActivity: thread.lastActivity,
+        }
+      });
     } catch (createError) {
       console.error(`CRITICAL: Failed to create thread:`, createError);
       return NextResponse.json(
@@ -118,35 +129,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-
-    // Revalidate the homepage to ensure fresh data
-    revalidatePath('/');
-
-    console.log('Thread created successfully:', threadId);
-    console.log('New thread details:', {
-      id: newThreadData.id,
-      title: newThreadData.title,
-      slug: newThreadData.slug,
-      hasContent: !!newThreadData.op.content,
-      hasImage: !!newThreadData.op.image,
-      hasVideo: !!newThreadData.op.video
-    });
-
-    return NextResponse.json({
-      success: true,
-      thread: {
-        id: newThreadData.id,
-        slug: newThreadData.slug,
-        title: newThreadData.title,
-        op: newThreadData.op,
-        replyCount: newThreadData.replyCount,
-        imageCount: newThreadData.imageCount,
-        videoCount: newThreadData.videoCount,
-        createdAt: newThreadData.createdAt,
-        lastActivity: newThreadData.lastActivity,
-        authorWallet: newThreadData.authorWallet
-      }
-    });
 
   } catch (error) {
     console.error('Create thread error:', error);
@@ -165,35 +147,24 @@ export async function GET(request: NextRequest) {
 
     console.log('Fetching threads, page:', page, 'slug:', slug);
 
-    // Load threads index from Lighthouse Storage
+    // Load threads from MongoDB
     let threadsIndex = null;
     try {
       threadsIndex = await getAllThreads();
     } catch (error) {
-      console.error('Thread list API: Failed to load threads index from Lighthouse:', error);
-      // IMPORTANT: Don't fall back to empty data - this causes data loss
-      // Return a proper error response instead
+      console.error('Thread list API: Failed to load threads from MongoDB:', error);
       return NextResponse.json(
         { error: 'Failed to load threads data from storage' },
         { status: 500 }
       );
     }
     
-    console.log(`Thread list API: Loaded ${threadsIndex?.threads?.length || 0} threads from Lighthouse Storage`);
-    console.log(`Thread list API: Thread IDs in storage:`, threadsIndex?.threads?.map((t: any) => t.id) || []);
-    console.log(`Thread list API: Storage timestamp:`, threadsIndex?.lastUpdated);
-    console.log(`Thread list API: Data structure check:`, {
-      hasData: !!threadsIndex,
-      hasThreads: !!threadsIndex?.threads,
-      threadCount: threadsIndex?.threads?.length || 0,
-      lastUpdated: threadsIndex?.lastUpdated
-    });
+    console.log(`Thread list API: Loaded ${threadsIndex?.threads?.length || 0} threads from MongoDB`);
     
     if (!threadsIndex || !threadsIndex.threads) {
-      console.log('No threads data found after retries');
+      console.log('No threads data found');
       return NextResponse.json(
-        { error: 'No threads found' },
-        { status: 404 }
+        { threads: [], page: 1, totalPages: 0, totalThreads: 0 }
       );
     }
 

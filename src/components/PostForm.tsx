@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { Send, X, Upload, Image, Video } from 'lucide-react';
-import { useWallet } from '@/contexts/WalletContext';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface PostFormData {
   content?: string | null; // Made optional - users can post just an image/video
@@ -22,7 +23,8 @@ export const PostForm: React.FC<PostFormProps> = ({
   onSubmit, 
   onCancel 
 }) => {
-  const { wallet } = useWallet();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -31,8 +33,8 @@ export const PostForm: React.FC<PostFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!wallet || !wallet.connected) {
-      alert('Please connect your Solana wallet first');
+    if (status === 'unauthenticated' || !session) {
+      router.push('/auth/signin');
       return;
     }
     
@@ -124,16 +126,22 @@ export const PostForm: React.FC<PostFormProps> = ({
     return `${isVideo ? 'Video' : 'Image'} (${mediaFile.name})`;
   };
 
-  if (!wallet || !wallet.connected) {
+  if (status === 'unauthenticated' || !session) {
     return (
       <div className="bg-white border border-orange-200 rounded-lg p-6 shadow-md">
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Connect Wallet Required
+            Sign In Required
           </h3>
           <p className="text-gray-600 mb-4">
-            You need to connect your Solana wallet to create threads and post replies.
+            You need to sign in to create threads and post replies.
           </p>
+          <button
+            onClick={() => router.push('/auth/signin')}
+            className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-2 rounded-lg"
+          >
+            Sign In
+          </button>
         </div>
       </div>
     );

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadToCloudinary } from '@/lib/cloudinaryStorage';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { uploadFileToGridFS } from '@/lib/mongodbStorage';
 
 // Allowed file types
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -12,6 +14,12 @@ const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10MB for videos
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     
@@ -58,20 +66,25 @@ export async function POST(request: NextRequest) {
     const finalExtension = extension === expectedExt ? extension : expectedExt;
     const filename = `${timestamp}-${randomId}.${finalExtension}`;
 
-    // Upload to Cloudinary
-    const uploadResult = await uploadToCloudinary(file, filename);
-    
-    if (!uploadResult.success) {
-      throw new Error('Failed to upload to Cloudinary');
-    }
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Upload to MongoDB GridFS
+    const fileId = await uploadFileToGridFS(
+      buffer,
+      filename,
+      file.type,
+      session.user.id
+    );
 
     return NextResponse.json({
-      url: uploadResult.url,
-      blobId: uploadResult.publicId, // Use Cloudinary public ID as blobId
+      url: `/api/files/${fileId}`,
+      blobId: fileId,
+      fileId: fileId,
       filename,
       fileType: file.type,
       isVideo,
-      publicId: uploadResult.publicId
     });
   } catch (error) {
     console.error('Upload error:', error);

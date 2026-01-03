@@ -6,7 +6,8 @@ import { PostComponent } from './PostComponent';
 import { PostForm } from './PostForm';
 import { SubscriptionPayment } from './SubscriptionPayment';
 import { ArrowLeft, MessageSquare, Wallet, User } from 'lucide-react';
-import { useWallet } from '@/contexts/WalletContext';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { ApiService } from '../services/api';
 
 interface ThreadViewProps {
@@ -14,32 +15,6 @@ interface ThreadViewProps {
   onBack: () => void;
 }
 
-// Custom styled wallet button component
-const WalletButton: React.FC = () => {
-  const { wallet, connect, disconnect } = useWallet();
-  
-  const handleWalletAction = async () => {
-    try {
-      if (wallet.connected) {
-        disconnect();
-      } else {
-        await connect();
-      }
-    } catch (error) {
-      console.error('Wallet action failed:', error);
-    }
-  };
-
-  return (
-    <button
-      onClick={handleWalletAction}
-      className="flex items-center space-x-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg mx-auto"
-    >
-      <Wallet size={18} />
-      <span>{wallet.connected ? 'Disconnect' : 'Connect Wallet'}</span>
-    </button>
-  );
-};
 
 export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, onBack }) => {
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -54,7 +29,8 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     daysRemaining?: number;
     endDate?: string;
   } | null>(null);
-  const { wallet } = useWallet();
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
   // Function to refresh thread data with smart merging
   const refreshThreadData = useCallback(async () => {
@@ -195,7 +171,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
       content: data.content,
       image: imageUrl,
       video: videoUrl,
-      authorWallet: wallet.publicKey
+      authorWallet: session?.user?.email || 'anonymous'
     };
     
     console.log('Creating reply with data:', replyData);
@@ -277,54 +253,13 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     }
   }, [uploadQueue, processUploadQueue]);
 
-  // Effect to check subscription status when wallet connects
-  useEffect(() => {
-    if (wallet.publicKey) {
-      checkSubscriptionStatus();
-    } else {
-      setSubscriptionStatus(null);
-    }
-  }, [wallet.publicKey]);
-
-  // Function to check subscription status
-  const checkSubscriptionStatus = async () => {
-    if (!wallet.publicKey) return;
-    
-    try {
-      const response = await fetch(`/api/subscription/check?wallet=${wallet.publicKey}`);
-      if (response.ok) {
-        const data = await response.json();
-        setSubscriptionStatus(data.subscription);
-      }
-    } catch (error) {
-      console.error('Failed to check subscription status:', error);
-    }
-  };
 
   // Function to create and add a new post with instant display
   const createNewPost = useCallback(async (data: any) => {
     try {
-      if (!wallet.publicKey) {
-        alert('Please connect your wallet first');
+      if (status === 'unauthenticated' || !session) {
+        router.push('/auth/signin');
         return;
-      }
-
-      // Check subscription status before allowing reply
-      const subscriptionResponse = await fetch(`/api/subscription/check?wallet=${wallet.publicKey}`);
-      if (subscriptionResponse.ok) {
-        const subscriptionData = await subscriptionResponse.json();
-        
-        if (!subscriptionData.canReply) {
-          if (subscriptionData.subscription.type === 'none') {
-            alert('You need a subscription to reply. Please pay 0.99 USDC for access to reply feature.');
-          } else if (subscriptionData.subscription.type === 'paid' && subscriptionData.subscription.daysRemaining === 0) {
-            alert('Your subscription has expired. Please renew with 0.99 USDC to continue replying.');
-          }
-          return;
-        }
-      } else {
-        console.error('Failed to check subscription status');
-        // Allow reply if subscription check fails (fail-safe)
       }
 
       setIsSubmitting(true);
@@ -337,7 +272,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
         image: data.image ? URL.createObjectURL(data.image) : null, // INSTANT preview
         imageThumb: data.image ? URL.createObjectURL(data.image) : null, // INSTANT preview
         video: data.video ? URL.createObjectURL(data.video) : null, // INSTANT preview
-        authorWallet: wallet.publicKey,
+        authorWallet: session.user?.email || 'anonymous',
         isAnonymous: true
       };
 
@@ -363,7 +298,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     } finally {
       setIsSubmitting(false);
     }
-  }, [wallet.publicKey, addNewPostOptimistically]);
+  }, [session, status, router, addNewPostOptimistically]);
   
   // Validate thread data
   if (!thread) {

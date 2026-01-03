@@ -65,7 +65,7 @@ export interface CreateThreadRequest {
   content?: string; // Made optional - users can post just an image/video
   image?: string;
   video?: string;
-  authorWallet: string;
+  // authorWallet removed - handled by server authentication
 }
 
 export interface CreatePostRequest {
@@ -73,5 +73,5 @@ export interface CreatePostRequest {
   content?: string | null; // Made optional - users can post just an image/video
   image?: string | null;
   video?: string | null;
-  authorWallet: string;
+  // authorWallet removed - handled by server authentication
 }

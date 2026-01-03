@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { CreatePostRequest } from '@/types';
-import { getThreadById, addCommentToThread, CommentData } from '@/lib/memoryStorage';
+import { getThreadById, addCommentToThread } from '@/lib/mongodbStorage';
 
 // Force dynamic rendering to prevent caching issues
 export const dynamic = 'force-dynamic';
@@ -11,21 +13,22 @@ export async function POST(
   { params }: { params: { threadId: string } }
 ) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     console.log('POST /api/threads/[threadId]/posts called with params:', params);
     const { threadId } = params;
     const body: CreatePostRequest = await _request.json();
     
     console.log('Request body:', body);
     
-    const { content, image, video, authorWallet } = body;
-
-    // Validate required fields: authorWallet is always required
-    if (!authorWallet) {
-      return NextResponse.json(
-        { error: 'Wallet connection required' },
-        { status: 400 }
-      );
-    }
+    const { content, image, video } = body;
 
     // Content, image, and video are optional, but at least one must be provided
     if (!content && !image && !video) {
@@ -35,10 +38,10 @@ export async function POST(
       );
     }
 
-    // Load the thread data from folder-based storage
+    // Load the thread data from MongoDB
     const threadData = await getThreadById(threadId);
     
-    if (!threadData || !threadData) {
+    if (!threadData) {
       return NextResponse.json(
         { error: 'Thread not found' },
         { status: 404 }
@@ -48,25 +51,22 @@ export async function POST(
     // Create new comment
     const commentId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
     
-    const newComment: CommentData = {
+    const newComment = {
       id: commentId,
-      timestamp: new Date(),
       content: content || undefined,
       image: image || undefined,
       video: video || undefined,
-      authorWallet,
-      isAnonymous: true,
-      mediaFiles: [] // Track media files for cleanup
+      authorId: session.user.id,
+      timestamp: new Date(),
     };
 
     console.log('Creating new comment:', newComment);
 
-    // Add comment to thread using folder-based storage
-    console.log(`Adding comment to thread ${threadId} using folder-based storage`);
+    // Add comment to thread using MongoDB storage
+    console.log(`Adding comment to thread ${threadId} using MongoDB storage`);
     try {
       await addCommentToThread(threadId, newComment);
       console.log(`Comment added successfully to thread ${threadId}`);
-      console.log(`Note: Thread stays in its current position (no bumping)`);
     } catch (addError) {
       console.error(`CRITICAL: Failed to add comment to thread:`, addError);
       return NextResponse.json(
@@ -82,7 +82,13 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      post: newComment
+      post: {
+        id: commentId,
+        content: newComment.content,
+        image: newComment.image,
+        video: newComment.video,
+        timestamp: newComment.timestamp,
+      }
     });
 
   } catch (error) {
@@ -102,10 +108,10 @@ export async function GET(
     console.log('GET /api/threads/[threadId]/posts called with params:', params);
     const { threadId } = params;
 
-    // Load the thread data from folder-based storage
+    // Load the thread data from MongoDB
     const threadData = await getThreadById(threadId);
     
-    if (!threadData || !threadData) {
+    if (!threadData) {
       return NextResponse.json(
         { error: 'Thread not found' },
         { status: 404 }
@@ -115,7 +121,7 @@ export async function GET(
     return NextResponse.json({
       thread: {
         ...threadData,
-        replies: threadData.replies || [] // Use replies from memory storage
+        replies: threadData.replies || []
       }
     });
 

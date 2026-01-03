@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Thread } from '../types';
 import { Calendar, MessageSquare, Image, ArrowLeft, Plus, ChevronLeft, ChevronRight, Video, RefreshCw } from 'lucide-react';
 import { PostForm } from './PostForm';
-import { useWallet } from '@/contexts/WalletContext';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { ApiService } from '@/services/api';
 
 interface ThreadListProps {
@@ -24,7 +25,8 @@ export const ThreadList: React.FC<ThreadListProps> = ({
   loading: externalLoading = false,
   onThreadCreated
 }) => {
-  const { wallet } = useWallet();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showNewThreadForm, setShowNewThreadForm] = useState(false);
@@ -221,13 +223,8 @@ export const ThreadList: React.FC<ThreadListProps> = ({
   }, [currentPage, initialThreads.length]);
 
   const handleCreateThread = async (data: any) => {
-    if (!wallet || !wallet.connected) {
-      alert('Please connect your wallet first');
-      return;
-    }
-    
-    if (!wallet.publicKey) {
-      alert('Wallet public key not available');
+    if (status === 'unauthenticated' || !session) {
+      router.push('/auth/signin');
       return;
     }
 
@@ -285,7 +282,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
           image: imageUrl || null,
           imageThumb: imageUrl || null,
           video: videoUrl || null,
-          authorWallet: wallet.publicKey,
+          authorWallet: session.user?.email || 'anonymous',
           isAnonymous: true
         },
         replies: [],
@@ -297,7 +294,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
         page: 1, // New threads always start on page 1
         createdAt: new Date(),
         lastActivity: new Date(),
-        authorWallet: wallet.publicKey,
+        authorWallet: session.user?.email || 'anonymous',
         isOptimistic: true // Flag to identify optimistic updates
       };
 
@@ -313,7 +310,6 @@ export const ThreadList: React.FC<ThreadListProps> = ({
         content: data.content,
         image: imageUrl || undefined,
         video: videoUrl || undefined,
-        authorWallet: wallet.publicKey
       });
 
       console.log('Thread created successfully:', result);
@@ -382,7 +378,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
             <span>Refresh</span>
           </button>
           
-          {wallet.connected && (
+          {status === 'authenticated' && session && (
             <button 
               onClick={() => setShowNewThreadForm(true)}
               className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
