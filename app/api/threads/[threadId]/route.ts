@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getThreadById } from '@/lib/memoryStorage';
+import { getThreadById } from '@/lib/mongodbStorage';
 
 // Force dynamic rendering to prevent caching issues
 export const dynamic = 'force-dynamic';
@@ -45,13 +45,13 @@ export async function GET(
     // Normalize dates for consistent API response
     const normalizedThread = {
       ...threadData,
-      replies: threadData.replies || [], // Use replies from memory storage
-      lastReply: threadData.lastReply?.toISOString?.() || threadData.lastReply,
-      createdAt: threadData.createdAt?.toISOString?.() || threadData.createdAt,
-      lastActivity: threadData.lastActivity?.toISOString?.() || threadData.lastActivity,
+      replies: threadData.replies || [],
+      lastReply: threadData.lastReply ? (typeof threadData.lastReply === 'string' ? threadData.lastReply : new Date(threadData.lastReply).toISOString()) : undefined,
+      createdAt: threadData.createdAt ? (typeof threadData.createdAt === 'string' ? threadData.createdAt : new Date(threadData.createdAt).toISOString()) : undefined,
+      lastActivity: threadData.lastActivity ? (typeof threadData.lastActivity === 'string' ? threadData.lastActivity : new Date(threadData.lastActivity).toISOString()) : undefined,
       op: {
         ...threadData.op,
-        timestamp: threadData.op?.timestamp?.toISOString?.() || threadData.op?.timestamp
+        timestamp: threadData.op?.timestamp ? (typeof threadData.op.timestamp === 'string' ? threadData.op.timestamp : new Date(threadData.op.timestamp).toISOString()) : undefined
       }
     };
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getThreadBySlug } from '@/lib/memoryStorage';
+import { getThreadBySlug } from '@/lib/mongodbStorage';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,13 +11,12 @@ export async function GET(
     const { slug } = params;
     console.log(`Fetching thread by slug: ${slug}`);
 
-    // Load thread data from Lighthouse Storage using folder-based structure
+    // Load thread data from MongoDB
     let threadData = null;
     try {
       threadData = await getThreadBySlug(slug);
     } catch (error) {
-      console.error('Failed to load thread data from Lighthouse:', error);
-      // IMPORTANT: Don't fall back to empty data - this causes data loss
+      console.error('Failed to load thread data from MongoDB:', error);
       return NextResponse.json(
         { success: false, error: 'Failed to load thread data from storage' },
         { status: 500 }

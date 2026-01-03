@@ -134,12 +134,21 @@ export async function createThread(threadData: {
   
   // Create OP post
   const opPostId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  
+  // Handle image/video: if it's a MongoDB ObjectId string, use it; if it's a URL, ignore it (legacy)
+  const imageFileId = threadData.op.image && !threadData.op.image.startsWith('http') 
+    ? threadData.op.image 
+    : null;
+  const videoFileId = threadData.op.video && !threadData.op.video.startsWith('http')
+    ? threadData.op.video
+    : null;
+  
   const opPost = new Post({
     id: opPostId,
     threadId: threadData.id,
     content: threadData.op.content || null,
-    imageFileId: threadData.op.image || null,
-    videoFileId: threadData.op.video || null,
+    imageFileId: imageFileId,
+    videoFileId: videoFileId,
     authorId: threadData.authorId,
     isAnonymous: true,
     timestamp: threadData.op.timestamp,
@@ -154,8 +163,8 @@ export async function createThread(threadData: {
     opPostId: opPostId,
     authorId: threadData.authorId,
     replyCount: 0,
-    imageCount: threadData.op.image ? 1 : 0,
-    videoCount: threadData.op.video ? 1 : 0,
+    imageCount: imageFileId ? 1 : 0,
+    videoCount: videoFileId ? 1 : 0,
     lastActivity: new Date(),
     createdAt: new Date(),
   });
@@ -190,13 +199,21 @@ export async function addCommentToThread(threadId: string, comment: {
 }) {
   await connectDB();
   
+  // Handle image/video: if it's a MongoDB ObjectId string, use it; if it's a URL, ignore it (legacy)
+  const imageFileId = comment.image && !comment.image.startsWith('http') 
+    ? comment.image 
+    : null;
+  const videoFileId = comment.video && !comment.video.startsWith('http')
+    ? comment.video
+    : null;
+  
   // Create post
   const post = new Post({
     id: comment.id,
     threadId: threadId,
     content: comment.content || null,
-    imageFileId: comment.image || null,
-    videoFileId: comment.video || null,
+    imageFileId: imageFileId,
+    videoFileId: videoFileId,
     authorId: comment.authorId,
     isAnonymous: true,
     timestamp: comment.timestamp,
@@ -207,8 +224,8 @@ export async function addCommentToThread(threadId: string, comment: {
   const thread = await Thread.findOne({ id: threadId });
   if (thread) {
     thread.replyCount = (thread.replyCount || 0) + 1;
-    if (comment.image) thread.imageCount = (thread.imageCount || 0) + 1;
-    if (comment.video) thread.videoCount = (thread.videoCount || 0) + 1;
+    if (imageFileId) thread.imageCount = (thread.imageCount || 0) + 1;
+    if (videoFileId) thread.videoCount = (thread.videoCount || 0) + 1;
     thread.lastActivity = new Date();
     await thread.save();
   }
