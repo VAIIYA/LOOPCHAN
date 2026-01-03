@@ -5,6 +5,7 @@ import { Thread } from '../types';
 import { Calendar, MessageSquare, Image, ArrowLeft, Plus, ChevronLeft, ChevronRight, Video, RefreshCw } from 'lucide-react';
 import { PostForm } from './PostForm';
 import { useWallet } from '@/contexts/WalletContext';
+import { usePostingPayment } from '@/hooks/usePostingPayment';
 import { ApiService } from '@/services/api';
 
 interface ThreadListProps {
@@ -25,6 +26,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
   onThreadCreated
 }) => {
   const { wallet } = useWallet();
+  const { processPayment } = usePostingPayment();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showNewThreadForm, setShowNewThreadForm] = useState(false);
@@ -303,13 +305,48 @@ export const ThreadList: React.FC<ThreadListProps> = ({
 
       // Create thread on server
       console.log('Sending thread creation request to server...');
-      const result = await ApiService.createThread({
-        title: data.title,
-        content: data.content,
-        image: imageUrl || undefined,
-        video: videoUrl || undefined,
-        authorWallet: wallet.publicKey,
-      });
+      
+      // Try to create thread - if payment is required, handle it
+      let paymentSignature: string | null = null;
+      let result;
+      
+      try {
+        result = await ApiService.createThread({
+          title: data.title,
+          content: data.content,
+          image: imageUrl || undefined,
+          video: videoUrl || undefined,
+          authorWallet: wallet.publicKey,
+        });
+      } catch (error: any) {
+        // Check if payment is required (status 402)
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('Payment required') || errorMessage.includes('402')) {
+          console.log('Payment required, processing payment...');
+          // Process payment
+          paymentSignature = await processPayment();
+          if (!paymentSignature) {
+            // Remove optimistic thread on payment failure
+            setThreads(prevThreads => 
+              prevThreads.filter(thread => thread.id !== tempThreadId)
+            );
+            alert('Payment failed or was cancelled. Thread creation cancelled.');
+            return;
+          }
+          
+          // Retry with payment signature
+          result = await ApiService.createThread({
+            title: data.title,
+            content: data.content,
+            image: imageUrl || undefined,
+            video: videoUrl || undefined,
+            authorWallet: wallet.publicKey,
+            paymentSignature,
+          });
+        } else {
+          throw error;
+        }
+      }
 
       console.log('Thread created successfully:', result);
 

@@ -26,7 +26,7 @@ export class ApiService {
     }
   }
 
-  static async createThread(request: CreateThreadRequest & { authorWallet?: string }): Promise<any> {
+  static async createThread(request: CreateThreadRequest & { authorWallet?: string; paymentSignature?: string }): Promise<any> {
     console.log('Creating thread:', request);
     
     try {
@@ -86,7 +86,7 @@ export class ApiService {
     }
   }
 
-  static async createPost(request: CreatePostRequest & { authorWallet?: string }): Promise<any> {
+  static async createPost(request: CreatePostRequest & { authorWallet?: string; paymentSignature?: string }): Promise<any> {
     console.log('Creating post:', request);
     
     const response = await fetch(`/api/threads/${request.threadId}/posts`, {

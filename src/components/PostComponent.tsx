@@ -93,7 +93,7 @@ export const PostComponent: React.FC<PostComponentProps> = ({ post, isOP = false
           {/* Username display */}
           <div className="flex items-center space-x-1 text-sm text-gray-600">
             <span className="font-medium">
-              {post.isAnonymous ? 'Anonymous' : (post.authorWallet ? `${post.authorWallet.slice(0, 8)}...` : 'Unknown')}
+              {post.authorDisplayName || (post.isAnonymous ? 'Anonymous' : (post.authorWallet ? `${post.authorWallet.slice(0, 8)}...` : 'Unknown'))}
             </span>
           </div>
           

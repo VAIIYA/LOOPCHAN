@@ -4,11 +4,9 @@ import { getAssociatedTokenAddress, createTransferInstruction, getAccount } from
 // USDC mint address on Solana mainnet
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
-// LoopChan treasury wallet (you'll need to replace this with your actual treasury wallet)
-// Using a placeholder that won't cause build errors
-const TREASURY_WALLET = process.env.TREASURY_WALLET_ADDRESS 
-  ? new PublicKey(process.env.TREASURY_WALLET_ADDRESS)
-  : new PublicKey('11111111111111111111111111111112'); // System program as placeholder
+// LoopChan treasury wallet for receiving posting fees
+const TREASURY_WALLET_ADDRESS = process.env.TREASURY_WALLET_ADDRESS || '2sRhKuPffCwT2uuGVu3DXDsLFmjv78uKkEMd9UYrF5jv';
+const TREASURY_WALLET = new PublicKey(TREASURY_WALLET_ADDRESS);
 
 // RPC endpoint - using Helius for better reliability
 const RPC_ENDPOINT = process.env.SOLANA_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY';

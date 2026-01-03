@@ -154,9 +154,76 @@ const FileSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// User Profile Schema - stores user profile information linked to wallet address
+const UserProfileSchema = new mongoose.Schema({
+  walletAddress: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true,
+  },
+  username: {
+    type: String,
+    default: null,
+    maxlength: 50,
+  },
+  location: {
+    type: String,
+    default: null,
+    maxlength: 100,
+  },
+  socialLinks: {
+    x: {
+      type: String,
+      default: null,
+    },
+    youtube: {
+      type: String,
+      default: null,
+    },
+  },
+  bio: {
+    type: String,
+    default: null,
+    maxlength: 500,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+}, {
+  timestamps: true,
+});
+
+// Mod Schema - stores wallet addresses that are mods
+const ModSchema = new mongoose.Schema({
+  walletAddress: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true,
+  },
+  addedBy: {
+    type: String, // Admin wallet address
+    required: true,
+  },
+  addedAt: {
+    type: Date,
+    default: Date.now,
+  },
+}, {
+  timestamps: true,
+});
+
 // Export models (use existing if already compiled)
 export const User = mongoose.models.User || mongoose.model('User', UserSchema);
 export const Thread = mongoose.models.Thread || mongoose.model('Thread', ThreadSchema);
 export const Post = mongoose.models.Post || mongoose.model('Post', PostSchema);
 export const File = mongoose.models.File || mongoose.model('File', FileSchema);
+export const UserProfile = mongoose.models.UserProfile || mongoose.model('UserProfile', UserProfileSchema);
+export const Mod = mongoose.models.Mod || mongoose.model('Mod', ModSchema);
 

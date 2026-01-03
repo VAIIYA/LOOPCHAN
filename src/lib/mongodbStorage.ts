@@ -1,5 +1,6 @@
 import { getGridFSBucket } from './mongodb';
 import { Thread, Post, File } from './models';
+import { getUserProfiles } from './profiles';
 import mongoose from 'mongoose';
 import { Readable } from 'stream';
 
@@ -25,34 +26,62 @@ export async function getAllThreads() {
     .limit(100)
     .lean();
   
-  // Get OP posts for each thread
-  const threadsWithOP = await Promise.all(
+  // Collect all author wallet addresses first
+  const allAuthorWallets = new Set<string>();
+  const threadsWithPosts = await Promise.all(
     threads.map(async (thread: any) => {
       const opPost: any = await Post.findOne({ id: thread.opPostId }).lean();
-      return {
-        ...thread,
-        op: opPost ? {
-          id: opPost.id,
-          content: opPost.content || null,
-          image: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
-          imageThumb: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
-          video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
-          authorWallet: opPost.authorId || 'anonymous',
-          timestamp: opPost.timestamp || thread.createdAt,
-          isAnonymous: opPost.isAnonymous !== false,
-        } : {
-          id: `fallback_${thread.id}`,
-          content: null,
-          image: undefined,
-          imageThumb: undefined,
-          video: undefined,
-          authorWallet: 'anonymous',
-          timestamp: thread.createdAt || new Date(),
-          isAnonymous: true,
-        },
-      };
+      if (opPost?.authorId) {
+        allAuthorWallets.add(opPost.authorId);
+      }
+      return { thread, opPost };
     })
   );
+  
+  // Fetch all profiles at once
+  let profilesMap = new Map<string, string>();
+  if (allAuthorWallets.size > 0) {
+    try {
+      const profiles = await getUserProfiles(Array.from(allAuthorWallets));
+      profiles.forEach(profile => {
+        profilesMap.set(profile.walletAddress, profile.username || 'Anonymous');
+      });
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+    }
+  }
+  
+  // Build threads with OP and display names
+  const threadsWithOP = threadsWithPosts.map(({ thread, opPost }) => {
+    const authorDisplayName = opPost?.authorId 
+      ? (profilesMap.get(opPost.authorId) || 'Anonymous')
+      : 'Anonymous';
+    
+    return {
+      ...thread,
+      op: opPost ? {
+        id: opPost.id,
+        content: opPost.content || null,
+        image: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
+        imageThumb: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
+        video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
+        authorWallet: opPost.authorId || 'anonymous',
+        authorDisplayName: authorDisplayName,
+        timestamp: opPost.timestamp || thread.createdAt,
+        isAnonymous: opPost.isAnonymous !== false,
+      } : {
+        id: `fallback_${thread.id}`,
+        content: null,
+        image: undefined,
+        imageThumb: undefined,
+        video: undefined,
+        authorWallet: 'anonymous',
+        authorDisplayName: 'Anonymous',
+        timestamp: thread.createdAt || new Date(),
+        isAnonymous: true,
+      },
+    };
+  });
   
   return {
     threads: threadsWithOP,
@@ -72,6 +101,31 @@ export async function getThreadById(threadId: string) {
     .sort({ timestamp: 1 })
     .lean();
   
+  // Get all author wallet addresses
+  const authorWallets = new Set<string>();
+  if (opPost?.authorId) authorWallets.add(opPost.authorId);
+  replies.forEach(reply => {
+    if (reply.authorId) authorWallets.add(reply.authorId);
+  });
+  
+  // Fetch all profiles at once
+  let profilesMap = new Map<string, string>();
+  if (authorWallets.size > 0) {
+    try {
+      const profiles = await getUserProfiles(Array.from(authorWallets));
+      profiles.forEach(profile => {
+        profilesMap.set(profile.walletAddress, profile.username || 'Anonymous');
+      });
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+    }
+  }
+  
+  // Get OP author display name
+  const opAuthorDisplayName = opPost?.authorId 
+    ? (profilesMap.get(opPost.authorId) || 'Anonymous')
+    : 'Anonymous';
+  
   return {
     ...thread,
     op: opPost ? {
@@ -81,6 +135,7 @@ export async function getThreadById(threadId: string) {
       imageThumb: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
       video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
       authorWallet: opPost.authorId || 'anonymous',
+      authorDisplayName: opAuthorDisplayName,
       timestamp: opPost.timestamp || thread.createdAt,
       isAnonymous: opPost.isAnonymous !== false,
     } : {
@@ -90,6 +145,7 @@ export async function getThreadById(threadId: string) {
       imageThumb: undefined,
       video: undefined,
       authorWallet: 'anonymous',
+      authorDisplayName: 'Anonymous',
       timestamp: thread.createdAt || new Date(),
       isAnonymous: true,
     },
@@ -99,7 +155,8 @@ export async function getThreadById(threadId: string) {
       content: reply.content,
       image: reply.imageFileId ? `/api/files/${reply.imageFileId}` : undefined,
       video: reply.videoFileId ? `/api/files/${reply.videoFileId}` : undefined,
-      authorWallet: 'anonymous',
+      authorWallet: reply.authorId || 'anonymous',
+      authorDisplayName: reply.authorId ? (profilesMap.get(reply.authorId) || 'Anonymous') : 'Anonymous',
       isAnonymous: reply.isAnonymous,
       mediaFiles: [],
     })),
@@ -117,16 +174,55 @@ export async function getThreadBySlug(slug: string) {
     .sort({ timestamp: 1 })
     .lean();
   
+  // Get all author wallet addresses
+  const authorWallets = new Set<string>();
+  if (opPost?.authorId) authorWallets.add(opPost.authorId);
+  replies.forEach(reply => {
+    if (reply.authorId) authorWallets.add(reply.authorId);
+  });
+  
+  // Fetch all profiles at once
+  let profilesMap = new Map<string, string>();
+  if (authorWallets.size > 0) {
+    try {
+      const profiles = await getUserProfiles(Array.from(authorWallets));
+      profiles.forEach(profile => {
+        profilesMap.set(profile.walletAddress, profile.username || 'Anonymous');
+      });
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+    }
+  }
+  
+  // Get OP author display name
+  const opAuthorDisplayName = opPost?.authorId 
+    ? (profilesMap.get(opPost.authorId) || 'Anonymous')
+    : 'Anonymous';
+  
   return {
     thread: {
       ...thread,
       op: opPost ? {
-        content: opPost.content,
+        id: opPost.id,
+        content: opPost.content || null,
         image: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
+        imageThumb: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
         video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
+        authorWallet: opPost.authorId || 'anonymous',
+        authorDisplayName: opAuthorDisplayName,
+        timestamp: opPost.timestamp || thread.createdAt,
+        isAnonymous: opPost.isAnonymous !== false,
+      } : {
+        id: `fallback_${thread.id}`,
+        content: null,
+        image: undefined,
+        imageThumb: undefined,
+        video: undefined,
         authorWallet: 'anonymous',
-        timestamp: opPost.timestamp,
-      } : null,
+        authorDisplayName: 'Anonymous',
+        timestamp: thread.createdAt || new Date(),
+        isAnonymous: true,
+      },
     },
     comments: replies.map(reply => ({
       id: reply.id,
@@ -134,7 +230,8 @@ export async function getThreadBySlug(slug: string) {
       content: reply.content,
       image: reply.imageFileId ? `/api/files/${reply.imageFileId}` : undefined,
       video: reply.videoFileId ? `/api/files/${reply.videoFileId}` : undefined,
-      authorWallet: 'anonymous',
+      authorWallet: reply.authorId || 'anonymous',
+      authorDisplayName: reply.authorId ? (profilesMap.get(reply.authorId) || 'Anonymous') : 'Anonymous',
       isAnonymous: reply.isAnonymous,
       mediaFiles: [],
     })),

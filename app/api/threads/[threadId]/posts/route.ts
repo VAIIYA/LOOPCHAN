@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { CreatePostRequest } from '@/types';
 import { getThreadById, addCommentToThread } from '@/lib/mongodbStorage';
+import { isExemptFromFees } from '@/lib/admin';
 
 // Force dynamic rendering to prevent caching issues
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function POST(
     
     console.log('Request body:', body);
     
-    const { content, image, video, authorWallet } = body;
+    const { content, image, video, authorWallet, paymentSignature } = body;
     
     // Check wallet authentication
     if (!authorWallet) {
@@ -25,6 +26,47 @@ export async function POST(
         { error: 'Wallet connection required. Please connect your Solana wallet.' },
         { status: 401 }
       );
+    }
+
+    // Check if user is exempt from fees (admin or mod)
+    const exemptFromFees = await isExemptFromFees(authorWallet);
+    
+    // If not exempt, verify payment
+    if (!exemptFromFees) {
+      if (!paymentSignature) {
+        return NextResponse.json(
+          { 
+            error: 'Payment required',
+            requiresPayment: true,
+            amount: 0.01,
+            message: 'You must pay 0.01 USDC to post a comment. Admins and mods are exempt.'
+          },
+          { status: 402 } // 402 Payment Required
+        );
+      }
+
+      // Verify payment signature
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+          (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+        const verifyResponse = await fetch(
+          `${baseUrl}/api/payments/posting-fee?signature=${paymentSignature}&fromWallet=${authorWallet}`
+        );
+        const verifyResult = await verifyResponse.json();
+        
+        if (!verifyResult.verified) {
+          return NextResponse.json(
+            { error: 'Payment verification failed. Please try again.' },
+            { status: 402 }
+          );
+        }
+      } catch (verifyError) {
+        console.error('Payment verification error:', verifyError);
+        return NextResponse.json(
+          { error: 'Payment verification failed. Please try again.' },
+          { status: 402 }
+        );
+      }
     }
 
     // Content, image, and video are optional, but at least one must be provided

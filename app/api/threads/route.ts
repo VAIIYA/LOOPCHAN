@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllThreads, createThread } from '@/lib/mongodbStorage';
+import { isExemptFromFees } from '@/lib/admin';
 import { revalidatePath } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check wallet authentication
     const body = await request.json();
-    const { title, content, image, video, authorWallet } = body;
+    const { title, content, image, video, authorWallet, paymentSignature } = body;
     
     if (!authorWallet) {
       return NextResponse.json(
@@ -43,6 +44,47 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('POST /api/threads called');
+    
+    // Check if user is exempt from fees (admin or mod)
+    const exemptFromFees = await isExemptFromFees(authorWallet);
+    
+    // If not exempt, verify payment
+    if (!exemptFromFees) {
+      if (!paymentSignature) {
+        return NextResponse.json(
+          { 
+            error: 'Payment required',
+            requiresPayment: true,
+            amount: 0.01,
+            message: 'You must pay 0.01 USDC to create a thread. Admins and mods are exempt.'
+          },
+          { status: 402 } // 402 Payment Required
+        );
+      }
+
+      // Verify payment signature
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+          (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+        const verifyResponse = await fetch(
+          `${baseUrl}/api/payments/posting-fee?signature=${paymentSignature}&fromWallet=${authorWallet}`
+        );
+        const verifyResult = await verifyResponse.json();
+        
+        if (!verifyResult.verified) {
+          return NextResponse.json(
+            { error: 'Payment verification failed. Please try again.' },
+            { status: 402 }
+          );
+        }
+      } catch (verifyError) {
+        console.error('Payment verification error:', verifyError);
+        return NextResponse.json(
+          { error: 'Payment verification failed. Please try again.' },
+          { status: 402 }
+        );
+      }
+    }
     
     console.log('Request body:', { title, hasContent: !!content, hasImage: !!image, hasVideo: !!video });
 

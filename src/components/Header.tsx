@@ -1,7 +1,10 @@
 'use client'
 
 import React from 'react';
+import { useWallet } from '@/contexts/WalletContext';
 import WalletConnect from './WalletConnect';
+
+const ADMIN_WALLET = '2Z9eW3nwa2GZUM1JzXdfBK1MN57RPA2PrhuTREEZ31VY';
 
 interface HeaderProps {
   showHomeLink?: boolean;
@@ -16,6 +19,9 @@ export const Header: React.FC<HeaderProps> = ({
   title = 'LoopChan',
   onBack 
 }) => {
+  const { wallet } = useWallet();
+  const isAdmin = wallet.connected && wallet.publicKey === ADMIN_WALLET;
+
   return (
     <header className="bg-white border-b border-orange-200 shadow-sm">
       <div className="max-w-6xl mx-auto px-6 py-4">
@@ -67,6 +73,24 @@ export const Header: React.FC<HeaderProps> = ({
                 className="text-orange-600 hover:text-orange-700 transition-colors"
               >
                 Advertise
+              </a>
+            )}
+            
+            {isAdmin && (
+              <a
+                href="/admin"
+                className="text-orange-600 hover:text-orange-700 transition-colors font-semibold"
+              >
+                Admin
+              </a>
+            )}
+            
+            {wallet.connected && wallet.publicKey && (
+              <a
+                href="/profile"
+                className="text-orange-600 hover:text-orange-700 transition-colors"
+              >
+                Profile
               </a>
             )}
           </div>

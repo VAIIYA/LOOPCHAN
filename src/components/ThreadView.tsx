@@ -6,6 +6,7 @@ import { PostComponent } from './PostComponent';
 import { PostForm } from './PostForm';
 import { ArrowLeft, MessageSquare, User } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
+import { usePostingPayment } from '@/hooks/usePostingPayment';
 import { ApiService } from '../services/api';
 
 interface ThreadViewProps {
@@ -22,6 +23,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
   const [uploadQueue, setUploadQueue] = useState<Array<{id: string, data: any, status: 'pending' | 'uploading' | 'completed' | 'failed'}>>([]);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const { wallet } = useWallet();
+  const { processPayment } = usePostingPayment();
 
   // Function to refresh thread data with smart merging
   const refreshThreadData = useCallback(async () => {
@@ -158,7 +160,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     }
     
     // Create the reply data
-    const replyData = {
+    let replyData: any = {
       content: data.content,
       image: imageUrl,
       video: videoUrl,
@@ -169,13 +171,35 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
     
     // Send reply to server
     console.log('Sending reply creation request to server...');
-    const response = await fetch(`/api/threads/${thread.id}/posts`, {
+    let response = await fetch(`/api/threads/${thread.id}/posts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(replyData),
     });
+    
+    // If payment is required, process it and retry
+    if (response.status === 402) {
+      const errorData = await response.json();
+      if (errorData.requiresPayment) {
+        console.log('Payment required, processing payment...');
+        const paymentSignature = await processPayment();
+        if (!paymentSignature) {
+          throw new Error('Payment failed or was cancelled');
+        }
+        
+        // Retry with payment signature
+        replyData.paymentSignature = paymentSignature;
+        response = await fetch(`/api/threads/${thread.id}/posts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(replyData),
+        });
+      }
+    }
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Failed to create reply' }));

@@ -7,6 +7,7 @@ export interface Post {
   video?: string | null;
   replies?: Post[];
   authorWallet?: string; // Solana wallet address
+  authorDisplayName?: string; // Custom username or "Anonymous"
   blobId?: string; // Vercel Blob ID for the post content
   imageBlobId?: string; // Vercel Blob ID for the image
   videoBlobId?: string; // Vercel Blob ID for the video
@@ -66,6 +67,7 @@ export interface CreateThreadRequest {
   image?: string;
   video?: string;
   authorWallet?: string; // Solana wallet address
+  paymentSignature?: string; // Payment transaction signature for posting fee
 }
 
 export interface CreatePostRequest {
@@ -74,4 +76,5 @@ export interface CreatePostRequest {
   image?: string | null;
   video?: string | null;
   authorWallet?: string; // Solana wallet address
+  paymentSignature?: string; // Payment transaction signature for posting fee
 }
