@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { DollarSign, Users, Shield, AlertTriangle } from 'lucide-react';
-import { useWallet } from '@/contexts/WalletContext';
+import { useSession } from 'next-auth/react';
 
 interface FreeWallet {
   wallets: string[];
@@ -22,23 +22,22 @@ interface PaidSubscription {
   count: number;
 }
 
-// Admin wallet addresses that can access this page
-const ADMIN_WALLETS = [
-  '2Z9eW3nwa2GZUM1JzXdfBK1MN57RPA2PrhuTREEZ31VY',
-  'HK7aLFrSXgUhaTPCJpEBDS6kgfwG9kJUBUqThFhX5PMG'
+// Admin email addresses that can access this page
+const ADMIN_EMAILS = [
+  'admin@loopchan.vercel.app',
+  // Add your admin email addresses here
 ];
 
 export default function AdminSubscriptionsPage() {
-  const { wallet } = useWallet();
-  const connected = wallet.connected;
+  const { data: session, status } = useSession();
   const [freeWallets, setFreeWallets] = useState<FreeWallet>({ wallets: [], count: 0 });
   const [paidSubscriptions, setPaidSubscriptions] = useState<PaidSubscription>({ subscriptions: [], count: 0 });
   const [loading, setLoading] = useState(true);
   const [newWalletAddress, setNewWalletAddress] = useState('');
   const [action, setAction] = useState<'add-free' | 'remove-free'>('add-free');
 
-  // Check if current wallet is an admin wallet
-  const isAdmin = connected && wallet && ADMIN_WALLETS.includes(wallet.publicKey?.toString() || '');
+  // Check if current user is an admin
+  const isAdmin = status === 'authenticated' && session?.user?.email && ADMIN_EMAILS.includes(session.user.email);
 
   useEffect(() => {
     if (isAdmin) {
@@ -51,7 +50,7 @@ export default function AdminSubscriptionsPage() {
       setLoading(true);
       const response = await fetch('/api/admin/subscriptions', {
         headers: {
-          'x-admin-wallet': wallet?.publicKey?.toString() || ''
+          'x-admin-email': session?.user?.email || ''
         }
       });
       if (response.ok) {
@@ -79,7 +78,7 @@ export default function AdminSubscriptionsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-wallet': wallet?.publicKey?.toString() || ''
+          'x-admin-email': session?.user?.email || ''
         },
         body: JSON.stringify({
           action,
@@ -135,26 +134,26 @@ export default function AdminSubscriptionsPage() {
               <p className="text-gray-600 mb-6">
                 This admin panel is restricted to authorized wallet addresses only.
               </p>
-              {!connected ? (
+              {status !== 'authenticated' ? (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-500">
-                    Please connect your wallet to verify admin access.
+                    Please sign in to verify admin access.
                   </p>
                   <button
-                    onClick={() => window.location.href = '/'}
+                    onClick={() => window.location.href = '/auth/signin'}
                     className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors"
                   >
-                    Go to Homepage
+                    Sign In
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
                     <AlertTriangle className="w-4 h-4" />
-                    <span>Connected wallet is not authorized for admin access</span>
+                    <span>Your account is not authorized for admin access</span>
                   </div>
                   <p className="text-xs text-gray-400">
-                    Connected: {wallet?.publicKey?.toString().slice(0, 8)}...{wallet?.publicKey?.toString().slice(-8)}
+                    Signed in as: {session?.user?.email}
                   </p>
                   <button
                     onClick={() => window.location.href = '/'}

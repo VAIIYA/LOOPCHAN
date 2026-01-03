@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { DollarSign, Clock, Target, Smartphone, Monitor, CheckCircle, AlertCircle } from 'lucide-react';
-import { useWallet } from '@/contexts/WalletContext';
-import { usePayment } from '@/hooks/usePayment';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Header } from '../../src/components/Header';
 
 interface AdPackage {
@@ -76,8 +76,8 @@ const adPlacements: AdPlacement[] = [
 ];
 
 export default function AdvertisePage() {
-  const { wallet } = useWallet();
-  const { paymentState, processPayment, resetPaymentState } = usePayment();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [selectedPackage, setSelectedPackage] = useState<string>('14days');
   const [selectedPlacements, setSelectedPlacements] = useState<string[]>(['desktop-header']);
   const [selectedBoards, setSelectedBoards] = useState<string[]>(['all']);
@@ -136,8 +136,9 @@ export default function AdvertisePage() {
   };
 
   const handlePurchase = async () => {
-    if (!wallet.connected) {
-      alert('Please connect your Solana wallet to purchase advertising');
+    if (status !== 'authenticated' || !session) {
+      alert('Please sign in to purchase advertising');
+      router.push('/auth/signin');
       return;
     }
 
@@ -164,37 +165,18 @@ export default function AdvertisePage() {
         throw new Error('Invalid package selected');
       }
 
-      // Process real USDC payment
-      const success = await processPayment({
-        amount: selectedPackageData.price,
-        description: `LoopChan Advertising - ${selectedPackageData.duration} days`,
-        type: 'advertising',
-        subscriptionData: {
-          package: selectedPackageData,
-          placements: selectedPlacements,
-          boards: selectedBoards,
-          startDate,
-          adTitle,
-          adImage: adImage ? adImage.name : null,
-          adUrl
-        }
-      });
-
-      if (success) {
-        alert('Ad purchase successful! Your ad will be reviewed and activated within 24 hours.');
-        
-        // Reset form
-        setSelectedPackage('14days');
-        setSelectedPlacements(['desktop-header']);
-        setSelectedBoards(['all']);
-        setStartDate('');
-        setAdImage(null);
-        setAdUrl('');
-        setAdTitle('');
-        resetPaymentState();
-      } else {
-        throw new Error(paymentState.error || 'Payment failed');
-      }
+      // TODO: Implement payment processing for advertising
+      // For now, just show a message that payment is not yet implemented
+      alert('Advertising payment is not yet implemented. Please contact advertise@loopchan.org for manual setup.');
+      
+      // Reset form
+      setSelectedPackage('14days');
+      setSelectedPlacements(['desktop-header']);
+      setSelectedBoards(['all']);
+      setStartDate('');
+      setAdImage(null);
+      setAdUrl('');
+      setAdTitle('');
       
     } catch (error) {
       console.error('Purchase failed:', error);
@@ -466,24 +448,29 @@ export default function AdvertisePage() {
                 </div>
               </div>
 
-              {!wallet.connected ? (
+              {status !== 'authenticated' || !session ? (
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
                   <AlertCircle className="w-6 h-6 text-orange-500 mx-auto mb-2" />
-                  <p className="text-orange-800">
-                    Please connect your Solana wallet to purchase advertising
+                  <p className="text-orange-800 mb-3">
+                    Please sign in to purchase advertising
                   </p>
+                  <button
+                    onClick={() => router.push('/auth/signin')}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600"
+                  >
+                    Sign In
+                  </button>
                 </div>
               ) : (
                 <button
                   onClick={handlePurchase}
-                  disabled={isProcessing || paymentState.isProcessing || paymentState.isVerifying || !adImage || !adUrl || !adTitle || !startDate}
+                  disabled={isProcessing || !adImage || !adUrl || !adTitle || !startDate}
                   className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
                 >
-                  {(isProcessing || paymentState.isProcessing || paymentState.isVerifying) ? (
+                  {isProcessing ? (
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      {paymentState.isProcessing ? 'Processing Payment...' : 
-                       paymentState.isVerifying ? 'Verifying Payment...' : 'Processing...'}
+                      Processing...
                     </div>
                   ) : (
                     `Purchase for ${totalPrice.toLocaleString()} USDC`

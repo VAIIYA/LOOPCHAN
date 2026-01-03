@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadThreadsDataFromCloudinary } from '@/lib/cloudinaryStorage';
-import { createThread, addCommentToThread } from '@/lib/mongodbStorage';
+import { createThread } from '@/lib/mongodbStorage';
 import { User } from '@/lib/models';
 import mongoose from 'mongoose';
 
@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
           slug: oldThread.slug || `thread-${oldThread.id}`,
           title: oldThread.title,
           op: {
-            content: oldThread.op?.content || null,
-            image: null, // Cloudinary URLs can't be used as file IDs
-            video: null, // Cloudinary URLs can't be used as file IDs
+            content: oldThread.op?.content || undefined,
+            image: undefined, // Cloudinary URLs can't be used as file IDs
+            video: undefined, // Cloudinary URLs can't be used as file IDs
             authorId: userId,
             timestamp: oldThread.op?.timestamp ? new Date(oldThread.op.timestamp) : (oldThread.createdAt ? new Date(oldThread.createdAt) : new Date()),
           },
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Also allow GET for manual triggers
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     await connectDB();
 
