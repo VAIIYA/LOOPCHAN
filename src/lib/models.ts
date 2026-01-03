@@ -52,8 +52,7 @@ const PostSchema = new mongoose.Schema({
     default: null,
   },
   authorId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     required: true,
   },
   isAnonymous: {
@@ -91,8 +90,7 @@ const ThreadSchema = new mongoose.Schema({
     required: true,
   },
   authorId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     required: true,
   },
   replyCount: {
@@ -141,8 +139,7 @@ const FileSchema = new mongoose.Schema({
     index: true, // Index for cleanup queries
   },
   uploadedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     required: true,
   },
   gridFSFileId: {
