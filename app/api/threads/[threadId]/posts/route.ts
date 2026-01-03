@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { CreatePostRequest } from '@/types';
 import { getThreadById, addCommentToThread } from '@/lib/mongodbStorage';
@@ -14,7 +13,7 @@ export async function POST(
 ) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || !session.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },

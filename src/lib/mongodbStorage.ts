@@ -1,4 +1,4 @@
-import { getDatabase, getGridFSBucket } from './mongodb';
+import { getGridFSBucket } from './mongodb';
 import { Thread, Post, File } from './models';
 import mongoose from 'mongoose';
 import { Readable } from 'stream';
@@ -27,12 +27,12 @@ export async function getAllThreads() {
   
   // Get OP posts for each thread
   const threadsWithOP = await Promise.all(
-    threads.map(async (thread) => {
-      const opPost = await Post.findOne({ id: thread.opPostId }).lean();
+    threads.map(async (thread: any) => {
+      const opPost: any = await Post.findOne({ id: thread.opPostId }).lean();
       return {
         ...thread,
         op: opPost ? {
-          content: opPost.content,
+          content: opPost.content || null,
           image: opPost.imageFileId ? `/api/files/${opPost.imageFileId}` : undefined,
           video: opPost.videoFileId ? `/api/files/${opPost.videoFileId}` : undefined,
           authorWallet: 'anonymous', // Keep for compatibility
@@ -52,11 +52,11 @@ export async function getAllThreads() {
 export async function getThreadById(threadId: string) {
   await connectDB();
   
-  const thread = await Thread.findOne({ id: threadId }).lean();
+  const thread: any = await Thread.findOne({ id: threadId }).lean();
   if (!thread) return null;
   
-  const opPost = await Post.findOne({ id: thread.opPostId }).lean();
-  const replies = await Post.find({ threadId: threadId })
+  const opPost: any = await Post.findOne({ id: thread.opPostId }).lean();
+  const replies: any[] = await Post.find({ threadId: threadId })
     .sort({ timestamp: 1 })
     .lean();
   
@@ -85,11 +85,11 @@ export async function getThreadById(threadId: string) {
 export async function getThreadBySlug(slug: string) {
   await connectDB();
   
-  const thread = await Thread.findOne({ slug }).lean();
+  const thread: any = await Thread.findOne({ slug }).lean();
   if (!thread) return null;
   
-  const opPost = await Post.findOne({ id: thread.opPostId }).lean();
-  const replies = await Post.find({ threadId: thread.id })
+  const opPost: any = await Post.findOne({ id: thread.opPostId }).lean();
+  const replies: any[] = await Post.find({ threadId: thread.id })
     .sort({ timestamp: 1 })
     .lean();
   
@@ -223,10 +223,20 @@ export async function uploadFileToGridFS(
   contentType: string,
   userId: string
 ): Promise<string> {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (dbError) {
+    console.error('MongoDB connection error:', dbError);
+    throw new Error(`Database connection failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
+  }
   
-  const gridFSBucket = await getGridFSBucket();
-  const db = await getDatabase();
+  let gridFSBucket;
+  try {
+    gridFSBucket = await getGridFSBucket();
+  } catch (bucketError) {
+    console.error('GridFS bucket error:', bucketError);
+    throw new Error(`Failed to get GridFS bucket: ${bucketError instanceof Error ? bucketError.message : 'Unknown error'}`);
+  }
   
   // Upload to GridFS
   const uploadStream = gridFSBucket.openUploadStream(filename, {
@@ -238,22 +248,37 @@ export async function uploadFileToGridFS(
   
   await new Promise((resolve, reject) => {
     uploadStream.on('finish', resolve);
-    uploadStream.on('error', reject);
+    uploadStream.on('error', (error) => {
+      console.error('GridFS upload stream error:', error);
+      reject(new Error(`GridFS upload failed: ${error.message}`));
+    });
   });
   
   // Save file metadata
-  const fileDoc = new File({
-    filename,
-    contentType,
-    size: buffer.length,
-    uploadedAt: new Date(),
-    uploadedBy: userId,
-    gridFSFileId: uploadStream.id,
-  });
-  await fileDoc.save();
-  
-  // Return the File document ID (not GridFS ID) for easier reference
-  return fileDoc._id.toString();
+  try {
+    const fileDoc = new File({
+      filename,
+      contentType,
+      size: buffer.length,
+      uploadedAt: new Date(),
+      uploadedBy: userId,
+      gridFSFileId: uploadStream.id,
+    });
+    await fileDoc.save();
+    
+    // Return the File document ID (not GridFS ID) for easier reference
+    return fileDoc._id.toString();
+  } catch (saveError) {
+    console.error('File metadata save error:', saveError);
+    // File was uploaded to GridFS but metadata save failed
+    // Try to delete the GridFS file to avoid orphaned files
+    try {
+      await gridFSBucket.delete(uploadStream.id);
+    } catch (deleteError) {
+      console.error('Failed to clean up GridFS file after metadata save failure:', deleteError);
+    }
+    throw new Error(`Failed to save file metadata: ${saveError instanceof Error ? saveError.message : 'Unknown error'}`);
+  }
 }
 
 export async function getFileFromGridFS(fileId: string): Promise<{

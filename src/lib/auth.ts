@@ -1,6 +1,6 @@
-import { NextAuthOptions } from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import EmailProvider from 'next-auth/providers/email';
+import NextAuth from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
+import Email from 'next-auth/providers/email';
 import { MongoDBAdapter } from '@auth/mongodb-adapter';
 import clientPromise from './mongodb';
 import bcrypt from 'bcryptjs';
@@ -20,11 +20,11 @@ async function connectDB() {
   await mongoose.connect(process.env.MONGODB_URI);
 }
 
-export const authOptions: NextAuthOptions = {
+// Export the auth handler for NextAuth v5
+export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: MongoDBAdapter(clientPromise),
   providers: [
-    CredentialsProvider({
-      name: 'Credentials',
+    Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
@@ -36,12 +36,14 @@ export const authOptions: NextAuthOptions = {
 
         await connectDB();
         
-        const user = await User.findOne({ email: credentials.email.toLowerCase() });
+        const email = typeof credentials.email === 'string' ? credentials.email.toLowerCase() : String(credentials.email).toLowerCase();
+        const password = typeof credentials.password === 'string' ? credentials.password : String(credentials.password);
+        const user = await User.findOne({ email });
         if (!user) {
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
           return null;
         }
@@ -53,7 +55,7 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
-    EmailProvider({
+    Email({
       server: {
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT),
@@ -70,7 +72,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/auth/signin',
-    signUp: '/auth/signup',
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -87,6 +88,6 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
-};
+  secret: process.env.NEXTAUTH_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'temp-secret-for-development'),
+});
 

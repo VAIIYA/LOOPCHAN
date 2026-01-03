@@ -4,8 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Thread, Post } from '../types';
 import { PostComponent } from './PostComponent';
 import { PostForm } from './PostForm';
-import { SubscriptionPayment } from './SubscriptionPayment';
-import { ArrowLeft, MessageSquare, Wallet, User } from 'lucide-react';
+import { ArrowLeft, MessageSquare, User } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { ApiService } from '../services/api';
@@ -23,12 +22,6 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadQueue, setUploadQueue] = useState<Array<{id: string, data: any, status: 'pending' | 'uploading' | 'completed' | 'failed'}>>([]);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<{
-    canReply: boolean;
-    type: 'free' | 'paid' | 'none';
-    daysRemaining?: number;
-    endDate?: string;
-  } | null>(null);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -244,7 +237,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
       setTimeout(() => setShowSuccessToast(false), 3000); // Hide after 3 seconds
     }
     
-  }, [wallet.publicKey, thread.id, uploadQueue]);
+  }, [session, thread.id, uploadQueue]);
 
   // Effect to process upload queue when it changes
   useEffect(() => {
@@ -442,53 +435,37 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ thread: initialThread, o
 
       {/* Always show Reply button at the bottom */}
       <div className="text-center py-8 border-t border-orange-200 mt-6">
-        {wallet.connected ? (
-          subscriptionStatus ? (
-            subscriptionStatus.canReply ? (
-              <button
-                onClick={() => setShowReplyForm(!showReplyForm)}
-                disabled={isSubmitting || uploadQueue.length > 0}
-                className="flex items-center space-x-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg mx-auto disabled:opacity-50"
-              >
-                <MessageSquare size={18} />
-                <span>
-                  {isSubmitting ? 'Posting...' : 
-                   uploadQueue.length > 0 ? `Uploading (${uploadQueue.length})` : 'Reply'}
-                </span>
-              </button>
-            ) : (
-              <SubscriptionPayment 
-                subscriptionStatus={subscriptionStatus}
-                onPaymentSuccess={() => {
-                  // Refresh subscription status after successful payment
-                  checkSubscriptionStatus();
-                }}
-              />
-            )
-          ) : (
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto mb-2"></div>
-              <p className="text-gray-600 text-sm">Checking subscription...</p>
-            </div>
-          )
+        {status === 'authenticated' && session ? (
+          <button
+            onClick={() => setShowReplyForm(!showReplyForm)}
+            disabled={isSubmitting || uploadQueue.length > 0}
+            className="flex items-center space-x-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg mx-auto disabled:opacity-50"
+          >
+            <MessageSquare size={18} />
+            <span>
+              {isSubmitting ? 'Posting...' : 
+               uploadQueue.length > 0 ? `Uploading (${uploadQueue.length})` : 'Reply'}
+            </span>
+          </button>
         ) : (
           <div className="text-center">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-center space-x-2 text-blue-800 mb-2">
                 <User size={20} />
-                <span className="font-medium">Connect Wallet</span>
+                <span className="font-medium">Sign In Required</span>
               </div>
-              <p className="text-blue-700 text-sm">
-                Connect your Solana wallet to check subscription status and reply to threads.
+              <p className="text-blue-700 text-sm mb-4">
+                Sign in to reply to threads.
               </p>
+              <button
+                onClick={() => router.push('/auth/signin')}
+                className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg"
+              >
+                Sign In
+              </button>
             </div>
           </div>
         )}
-        
-        {/* Custom styled wallet button */}
-        <div className="mt-4">
-          <WalletButton />
-        </div>
       </div>
     </div>
   );

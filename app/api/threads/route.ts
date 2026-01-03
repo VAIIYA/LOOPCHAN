@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getAllThreads, createThread } from '@/lib/mongodbStorage';
 import { revalidatePath } from 'next/cache';
 
@@ -34,7 +33,7 @@ function generateUniqueSlug(existingThreads: any[], title: string): string {
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || !session.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -170,8 +169,8 @@ export async function GET(request: NextRequest) {
 
     // If looking for a specific thread by slug, return just that thread
     if (slug) {
-      const thread = threadsIndex.threads.find((t: any) => t.slug === slug);
-      if (!thread) {
+      const threadData = threadsIndex.threads.find((t: any) => t.slug === slug);
+      if (!threadData) {
         console.log(`Thread with slug "${slug}" not found. Available slugs:`, 
           threadsIndex.threads.map((t: any) => t.slug || 'no-slug'));
         return NextResponse.json(
@@ -180,9 +179,9 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      console.log(`Found thread by slug: ${thread.title} (${thread.id})`);
+      console.log(`Found thread by slug: ${(threadData as any).title} (${(threadData as any).id})`);
       return NextResponse.json({
-        threads: [thread],
+        threads: [threadData],
         page: 1,
         totalPages: 1,
         totalThreads: 1

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { uploadFileToGridFS } from '@/lib/mongodbStorage';
 
 // Allowed file types
@@ -14,10 +13,34 @@ const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10MB for videos
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if NEXTAUTH_SECRET is configured
+    if (!process.env.NEXTAUTH_SECRET && process.env.NODE_ENV === 'production') {
+      console.error('NEXTAUTH_SECRET is not configured');
+      return NextResponse.json({ 
+        error: 'Server configuration error: NEXTAUTH_SECRET is missing' 
+      }, { status: 500 });
+    }
+
     // Check authentication
-    const session = await getServerSession(authOptions);
+    let session;
+    try {
+      session = await auth();
+    } catch (authError) {
+      console.error('Auth error:', authError);
+      const errorMessage = authError instanceof Error ? authError.message : 'Unknown auth error';
+      console.error('Auth error details:', errorMessage);
+      return NextResponse.json({ 
+        error: 'Authentication failed',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      }, { status: 401 });
+    }
+    
     if (!session || !session.user?.id) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      console.warn('Upload attempted without authentication');
+      return NextResponse.json({ 
+        error: 'Authentication required. Please sign in with email/password.',
+        hint: 'The system now uses email/password authentication instead of wallet connection.'
+      }, { status: 401 });
     }
 
     const formData = await request.formData();
@@ -88,8 +111,16 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Upload error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Upload error details:', {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { 
+        error: 'Failed to upload file',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
       { status: 500 }
     );
   }

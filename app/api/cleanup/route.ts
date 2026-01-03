@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Also allow GET for manual triggers (remove in production or add auth)
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const deletedCount = await cleanupOldFiles();
 
